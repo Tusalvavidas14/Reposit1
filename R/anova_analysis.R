@@ -126,6 +126,65 @@ write_out(file.path(results_dir, "tukey_gear.txt"), {
 m_add <- aov(mpg ~ am + gear, data = df)        # without interaction
 m_int <- aov(mpg ~ am * gear, data = df)        # with interaction
 
+# =========================
+# Консольные выводы (на русском)
+# =========================
+
+# Описательная статистика
+desc_am <- df %>% group_by(am) %>% summarise(n = dplyr::n(), mean_mpg = mean(mpg), sd_mpg = sd(mpg), .groups = "drop")
+desc_gear <- df %>% group_by(gear) %>% summarise(n = dplyr::n(), mean_mpg = mean(mpg), sd_mpg = sd(mpg), .groups = "drop")
+
+cat("\n=== Данные и описательная статистика ===\n")
+cat("Переменная отклика: mpg. Факторы: am (2 уровня), gear (3 уровня).\n\n")
+cat("MPG по типу трансмиссии (am):\n"); print(desc_am)
+cat("\nMPG по числу передач (gear):\n"); print(desc_gear)
+
+# Проверки допущений
+shap_am <- shapiro.test(res_am)
+lev_am <- car::leveneTest(mpg ~ am, data = df)
+shap_gear <- shapiro.test(res_gear)
+lev_gear <- car::leveneTest(mpg ~ gear, data = df)
+
+cat("\n=== Проверка применимости ANOVA ===\n")
+cat(sprintf("Shapiro-Wilk (остатки mpg~am): p = %.4f\n", shap_am$p.value))
+cat(sprintf("Levene (гомогенность дисперсий для am): p = %.4f\n", as.numeric(lev_am[1, "Pr(>F)"])))
+cat(sprintf("Shapiro-Wilk (остатки mpg~gear): p = %.4f\n", shap_gear$p.value))
+cat(sprintf("Levene (гомогенность дисперсий для gear): p = %.4f\n", as.numeric(lev_gear[1, "Pr(>F)"])))
+
+# Однофакторные ANOVA
+cat("\n=== Однофакторный ANOVA ===\n")
+cat("Модель: mpg ~ am\n"); print(summary(m_am))
+cat("\nМодель: mpg ~ gear\n"); print(summary(m_gear))
+
+# Tukey HSD для фактора с 3 уровнями
+tukey_gear <- TukeyHSD(m_gear, "gear")$gear
+cat("\nПопарные сравнения Tukey HSD для 'gear':\n")
+print(round(tukey_gear, 4))
+
+# Двухфакторные ANOVA
+cat("\n=== Двухфакторный ANOVA ===\n")
+cat("Без взаимодействия (mpg ~ am + gear)\n"); print(summary(m_add))
+cat("\nС взаимодействием (mpg ~ am * gear)\n"); print(summary(m_int))
+
+comp_tbl <- anova(m_add, m_int)
+cat("\nСравнение моделей (проверка наличия взаимодействия):\n"); print(comp_tbl)
+
+# Краткие выводы
+s1 <- summary(m_am)[[1]]
+s2 <- summary(m_gear)[[1]]
+p_am <- s1[1, "Pr(>F)"]
+p_gear <- s2[1, "Pr(>F)"]
+s_add <- summary(m_add)[[1]]
+p_am2 <- s_add["am", "Pr(>F)"]
+p_gear2 <- s_add["gear", "Pr(>F)"]
+p_interaction <- comp_tbl$`Pr(>F)`[2]
+
+cat("\n=== Итоговые выводы (кратко) ===\n")
+cat(sprintf("Различия MPG по типу трансмиссии (am): p = %.4f — %s.\n", p_am, ifelse(p_am < 0.05, "значимы", "не значимы")))
+cat(sprintf("Различия MPG по числу передач (gear): p = %.4f — %s.\n", p_gear, ifelse(p_gear < 0.05, "значимы", "не значимы")))
+cat(sprintf("Двухфакторная модель без взаимодействия: am p = %.4f, gear p = %.4f.\n", p_am2, p_gear2))
+cat(sprintf("Взаимодействие am:gear: p = %.4f — %s.\n", p_interaction, ifelse(p_interaction < 0.05, "значимо", "нет доказательств взаимодействия")))
+
 write_out(file.path(results_dir, "two_way_no_interaction.txt"), {
   cat("Two-way ANOVA: mpg ~ am + gear (no interaction)\n\n")
   print(summary(m_add))
